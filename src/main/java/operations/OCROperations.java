@@ -28,44 +28,51 @@ public class OCROperations {
         this.service = credentials.buildService();
     }
 
-    public void ocrAndDowloadDocxOperation(String fileId) throws IOException, TesseractException {
-        // Step 1: Load the image file from Google Drive
-//        String fileId = "18FJOr8TQX4lNHJQP63qxb76h5dcrhlq8";
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        service.files().get(fileId)
-                .executeMediaAndDownloadTo(outputStream);
+    public void ocrAndDowloadDocxOperation(String[] fileIds) throws IOException, TesseractException {
 
-        byte[] imageBytes = outputStream.toByteArray();
+        List<List<String>> extractedTextsAlphabet = new ArrayList<>();
+        List<List<String>> extractedTextsChinese = new ArrayList<>();
 
-        // Step 2: Perform OCR on the image using Tesseract
-        ITesseract tesseract = new Tesseract();
-        tesseract.setDatapath("E:\\Program Files\\Tesseract-OCR\\tessdata");
-        tesseract.setLanguage("chi_sim");
+        for (String fileId : fileIds) {
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            service.files().get(fileId)
+                    .executeMediaAndDownloadTo(outputStream);
 
-        String extractedText = tesseract.doOCR(ImageIO.read(new ByteArrayInputStream(imageBytes)));
+            byte[] imageBytes = outputStream.toByteArray();
 
-        String chinesePattern = "[\\u4E00-\\u9FA5]+"; // regex pattern to match Chinese characters
-        String alphabetPattern = "[a-zA-Z]+"; // regex pattern to match alphabets
-        Pattern pattern = Pattern.compile("(" + chinesePattern + ")|(" + alphabetPattern + ")");
-        Matcher matcher = pattern.matcher(extractedText);
-        List<String> chinese = new ArrayList<>();
-        List<String> alphabet = new ArrayList<>();
-        while (matcher.find()) {
-            if (matcher.group(1) != null) {
-                chinese.add(matcher.group(1));
-            } else if (matcher.group(2) != null) {
-                alphabet.add(matcher.group(2));
+            // Step 2: Perform OCR on the image using Tesseract
+            ITesseract tesseract = new Tesseract();
+            tesseract.setDatapath("E:\\Program Files\\Tesseract-OCR\\tessdata");
+            tesseract.setLanguage("chi_sim");
+
+            String extractedText = tesseract.doOCR(ImageIO.read(new ByteArrayInputStream(imageBytes)));
+
+            String chinesePattern = "[\\u4E00-\\u9FA5]+"; // regex pattern to match Chinese characters
+            String alphabetPattern = "[a-zA-Z]+"; // regex pattern to match alphabets
+            Pattern pattern = Pattern.compile("(" + chinesePattern + ")|(" + alphabetPattern + ")");
+            Matcher matcher = pattern.matcher(extractedText);
+            List<String> chinese = new ArrayList<>();
+            List<String> alphabet = new ArrayList<>();
+            while (matcher.find()) {
+                if (matcher.group(1) != null) {
+                    chinese.add(matcher.group(1));
+                } else if (matcher.group(2) != null) {
+                    alphabet.add(matcher.group(2));
+                }
             }
+
+            System.out.println("Chinese: " + chinese);
+            System.out.println("Alphabet: " + alphabet);
+            extractedTextsChinese.add(chinese);
+            extractedTextsAlphabet.add(alphabet);
         }
 
-        System.out.println("Chinese: " + chinese);
-        System.out.println("Alphabet: " + alphabet);
 
         // Step 3: Output the extracted text to docx files
         XWPFDocument chineseDoc = new XWPFDocument();
         XWPFDocument alphabetDoc = new XWPFDocument();
-        writeWordsToDoc(chineseDoc, chinese);
-        writeWordsToDoc(alphabetDoc, alphabet);
+        writeWordsToDoc(chineseDoc, extractedTextsChinese);
+        writeWordsToDoc(alphabetDoc, extractedTextsAlphabet);
         FileOutputStream chineseFos = new FileOutputStream("chinese_output.docx");
         FileOutputStream alphabetFos = new FileOutputStream("alphabet_output.docx");
         chineseDoc.write(chineseFos);
@@ -76,14 +83,18 @@ public class OCROperations {
         alphabetDoc.close();
     }
 
-    private void writeWordsToDoc(XWPFDocument doc, List<String> words) {
-        XWPFParagraph para = doc.createParagraph();
-        for (String word : words) {
-            XWPFRun run = para.createRun();
-            run.setText(word + " ");
-            if (word.contains("o") || word.contains("O")) {
-                run.setColor("0000FF");
+    private void writeWordsToDoc(XWPFDocument doc, List<List<String>> paragraphs) {
+        for (List<String> paragraph : paragraphs) {
+            XWPFParagraph para = doc.createParagraph();
+            for (String word : paragraph) {
+                XWPFRun run = para.createRun();
+                run.setText(word + " ");
+                if (word.contains("o") || word.contains("O")) {
+                    run.setColor("0000FF");
+                }
             }
+            XWPFRun runParagraph = para.createRun();
+            runParagraph.addBreak();
         }
     }
 }
